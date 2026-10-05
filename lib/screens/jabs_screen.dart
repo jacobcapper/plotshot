@@ -9,13 +9,23 @@ import '../widgets/common.dart';
 import '../widgets/next_jab_card.dart';
 import 'jab_editor_screen.dart';
 
-class JabsScreen extends StatelessWidget {
+class JabsScreen extends StatefulWidget {
   const JabsScreen({super.key});
+
+  @override
+  State<JabsScreen> createState() => _JabsScreenState();
+}
+
+class _JabsScreenState extends State<JabsScreen> {
+  /// History filter; null shows every medication.
+  int? _filterMedId;
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final jabs = state.jabs;
+    final inUse = state.medicationsInUse;
+    final filter = inUse.any((m) => m.id == _filterMedId) ? _filterMedId : null;
+    final jabs = filter == null ? state.jabs : state.jabsFor(filter);
     // Newest first, grouped by month.
     final items = <Widget>[];
     String? month;
@@ -38,7 +48,7 @@ class JabsScreen extends StatelessWidget {
           ),
         );
       }
-      items.add(_JabTile(jab: j, number: i + 1));
+      items.add(_JabTile(jab: j, number: state.jabNumber(j)));
     }
 
     return Scaffold(
@@ -61,12 +71,32 @@ class JabsScreen extends StatelessWidget {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
-            child: NextJabCard(),
+            child: NextJabCards(),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: SectionHeader('History'),
           ),
+          if (inUse.length > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('All'),
+                    selected: filter == null,
+                    onSelected: (_) => setState(() => _filterMedId = null),
+                  ),
+                  for (final m in inUse)
+                    ChoiceChip(
+                      label: Text(m.name),
+                      selected: filter == m.id,
+                      onSelected: (_) => setState(() => _filterMedId = m.id),
+                    ),
+                ],
+              ),
+            ),
           if (jabs.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),

@@ -7,6 +7,7 @@ import '../data/settings.dart';
 import '../logic/dates.dart';
 import '../logic/stats.dart';
 import '../logic/units.dart';
+import '../models/medication.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/day_editors.dart';
@@ -66,7 +67,7 @@ class SummaryScreen extends StatelessWidget {
     SummarySection.jabHistory => const _JabHistorySection(),
     SummarySection.levels => const _LevelsSection(),
     SummarySection.nextJab => const Column(
-      children: [SectionHeader('Next Jab'), NextJabCard()],
+      children: [SectionHeader('Next Jab'), NextJabCards()],
     ),
     SummarySection.today => const _TodaySection(),
     SummarySection.results => const _ResultsSection(),
@@ -87,33 +88,54 @@ class _JabHistorySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final last = state.lastJab;
+    final inUse = state.medicationsInUse;
+    final multiple = inUse.length > 1;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader('Jab History', trailing: _seeAll(context, 1)),
-        StatGrid(
-          children: [
-            StatCard(
-              icon: Icons.vaccines,
-              label: 'Jabs taken',
-              value: '${state.jabs.length}',
+        if (inUse.isEmpty) _row(state, null),
+        // One row per medication, so each keeps its own count and level.
+        for (final (i, m) in inUse.indexed) ...[
+          if (i > 0) const SizedBox(height: 12),
+          if (multiple)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: Text(
+                m.name,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            StatCard(
-              icon: Icons.medication,
-              label: 'Last dose',
-              value: last == null ? '—' : formatDose(last.doseMg),
-              unit: last == null ? null : 'mg',
-            ),
-            StatCard(
-              icon: Icons.ssid_chart,
-              iconColor: AppColors.level,
-              label: 'Est. level',
-              value: last == null
-                  ? '—'
-                  : state.currentLevel().toStringAsFixed(2),
-              unit: last == null ? null : 'mg',
-            ),
-          ],
+          _row(state, m),
+        ],
+      ],
+    );
+  }
+
+  Widget _row(AppState state, Medication? m) {
+    final last = m == null ? null : state.lastJabFor(m.id!);
+    return StatGrid(
+      children: [
+        StatCard(
+          icon: Icons.vaccines,
+          label: 'Jabs taken',
+          value: m == null ? '0' : '${state.jabsFor(m.id!).length}',
+        ),
+        StatCard(
+          icon: Icons.medication,
+          label: 'Last dose',
+          value: last == null ? '—' : formatDose(last.doseMg),
+          unit: last == null ? null : 'mg',
+        ),
+        StatCard(
+          icon: Icons.ssid_chart,
+          iconColor: AppColors.level,
+          label: 'Est. level',
+          value: m == null ? '—' : state.levelOf(m).toStringAsFixed(2),
+          unit: m == null ? null : 'mg',
         ),
       ],
     );
@@ -209,6 +231,7 @@ class _LevelsSectionState extends State<_LevelsSection> {
                             child: DropdownButton<int>(
                               value: medId,
                               isDense: true,
+                              isExpanded: true,
                               underline: const SizedBox.shrink(),
                               items: [
                                 for (final id in inUse)
@@ -216,6 +239,7 @@ class _LevelsSectionState extends State<_LevelsSection> {
                                     value: id,
                                     child: Text(
                                       state.medication(id)?.name ?? '?',
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                               ],

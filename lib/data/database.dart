@@ -19,7 +19,7 @@ class AppDatabase {
     final dbPath = path ?? p.join(await getDatabasesPath(), 'plotshot.db');
     final db = await openDatabase(
       dbPath,
-      version: 1,
+      version: 2,
       singleInstance: singleInstance,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, _) async {
@@ -27,6 +27,9 @@ class AppDatabase {
         for (final m in Medication.defaults) {
           await db.insert('medications', m.toMap());
         }
+      },
+      onUpgrade: (db, from, to) async {
+        if (from < 2) await _addScheduleColumns(db);
       },
     );
     return AppDatabase._(db);
@@ -40,7 +43,11 @@ class AppDatabase {
         half_life_days REAL NOT NULL,
         time_to_peak_days REAL NOT NULL,
         doses TEXT NOT NULL,
-        built_in INTEGER NOT NULL DEFAULT 0
+        built_in INTEGER NOT NULL DEFAULT 0,
+        days_between_jabs REAL NOT NULL DEFAULT 7,
+        active INTEGER NOT NULL DEFAULT 1,
+        sites TEXT,
+        next_dose_mg REAL
       )''');
     await db.execute('''
       CREATE TABLE jabs (
@@ -67,6 +74,27 @@ class AppDatabase {
         notes TEXT,
         nutrition_from_health INTEGER NOT NULL DEFAULT 0
       )''');
+  }
+
+  /// v2: dosing schedule, site rotation and planned dose moved from global
+  /// settings onto each medication. Values are copied across in
+  /// [AppState.load] from the old settings.
+  static Future<void> _addScheduleColumns(DatabaseExecutor db) async {
+    await db.execute(
+      'ALTER TABLE medications '
+      'ADD COLUMN days_between_jabs REAL NOT NULL DEFAULT 7',
+    );
+    await db.execute(
+      'ALTER TABLE medications '
+      'ADD COLUMN active INTEGER NOT NULL DEFAULT 1',
+    );
+    await db.execute('ALTER TABLE medications ADD COLUMN sites TEXT');
+    await db.execute('ALTER TABLE medications ADD COLUMN next_dose_mg REAL');
+    // Only medications actually in use keep a schedule.
+    await db.execute(
+      'UPDATE medications SET active = '
+      '(id IN (SELECT DISTINCT medication_id FROM jabs))',
+    );
   }
 
   // Medications

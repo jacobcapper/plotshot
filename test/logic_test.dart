@@ -47,6 +47,19 @@ void main() {
         'Overdue by 6 days',
       );
     });
+    test('fractional intervals add the remainder as hours', () {
+      final t = DateTime(2025, 8, 19, 20, 0);
+      expect(addDays(t, 3.5), DateTime(2025, 8, 23, 8, 0));
+      expect(addDays(t, 7), DateTime(2025, 8, 26, 20, 0));
+      expect(
+        NextJabInfo.compute(
+          Jab(medicationId: 1, doseMg: 1, takenAt: t),
+          3.5,
+          DateTime(2025, 8, 22, 12),
+        ).label,
+        'Due tomorrow',
+      );
+    });
     test('no jabs yet', () {
       expect(
         NextJabInfo.compute(null, 7, DateTime.now()).state,
@@ -97,6 +110,22 @@ void main() {
       expect(s[0].changeKg, closeTo(-2, 1e-9));
       expect(s[1].doseMg, 4);
       expect(s[1].changeKg, closeTo(-1, 1e-9));
+    });
+
+    test('interleaved medications are grouped independently', () {
+      final jabs = [
+        Jab(medicationId: 1, doseMg: 2, takenAt: DateTime(2025, 7, 1)),
+        Jab(medicationId: 2, doseMg: 75, takenAt: DateTime(2025, 7, 2)),
+        Jab(medicationId: 2, doseMg: 75, takenAt: DateTime(2025, 7, 5)),
+        Jab(medicationId: 1, doseMg: 2, takenAt: DateTime(2025, 7, 8)),
+        Jab(medicationId: 2, doseMg: 100, takenAt: DateTime(2025, 7, 9)),
+        Jab(medicationId: 1, doseMg: 4, takenAt: DateTime(2025, 7, 15)),
+      ];
+      final s = doseSummaries(jabs, [], DateTime(2025, 7, 21));
+      expect(
+        s.map((d) => '${d.medicationId}:${d.doseMg}x${d.jabCount}').toList(),
+        ['1:2.0x2', '2:75.0x2', '2:100.0x1', '1:4.0x1'],
+      );
     });
   });
 

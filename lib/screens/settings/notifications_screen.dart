@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/app_state.dart';
+import '../../logic/schedule.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 
@@ -12,7 +14,7 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final s = state.settings;
-    final next = state.nextJab();
+    final scheduled = state.scheduledMedications;
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
       body: ListView(
@@ -64,14 +66,24 @@ class NotificationsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            next.due == null
-                ? 'Log a jab and reminders will follow your schedule '
-                      '(every ${s.daysBetweenJabs} days).'
-                : 'Your next jab is ${next.label.toLowerCase()}. If you miss '
-                      'it, you\'ll be reminded again daily for up to '
-                      '${AppState.missedJabFollowUps} days.',
+            scheduled.isEmpty
+                ? 'Reminders follow each medication\'s own schedule, set in '
+                      'Settings → Medications. Log a jab to start one.'
+                : 'Each active medication gets its own reminder on its jab '
+                      'day. If you miss one, you\'ll be reminded again daily '
+                      'for up to ${AppState.missedJabFollowUps} days.',
             style: const TextStyle(color: AppColors.muted),
           ),
+          for (final m in scheduled)
+            if (state.nextJab(m).due case final due?)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '${m.name}: ${state.nextJab(m).label.toLowerCase()} '
+                  '(${DateFormat('EEE d MMM').format(due)}), every '
+                  '${formatDays(m.daysBetweenJabs)} days',
+                ),
+              ),
         ],
       ),
     );

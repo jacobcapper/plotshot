@@ -36,6 +36,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ? null
         : DateTime.now().subtract(Duration(days: days));
     final stats = WeightStats.compute(state.weights, since: since);
+    final chartMed = state.chartMedication;
     final inRange = since == null
         ? state.weights
         : state.weights.where((w) => !w.date.isBefore(since)).toList();
@@ -91,11 +92,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-                child: WeightChart(
-                  weights: inRange,
-                  jabs: state.jabs,
-                  unit: unit,
-                  goalKg: goal,
+                child: Column(
+                  children: [
+                    if (state.medicationsInUse.length > 1)
+                      _chartMedicationPicker(state),
+                    WeightChart(
+                      weights: inRange,
+                      jabs: chartMed == null
+                          ? const []
+                          : state.jabsFor(chartMed.id!),
+                      unit: unit,
+                      goalKg: goal,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -169,9 +178,39 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
+  /// Which medication's doses colour the weight line.
+  Widget _chartMedicationPicker(AppState state) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+    child: Row(
+      children: [
+        const Text(
+          'Coloured by',
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButton<int>(
+            isExpanded: true,
+            value: state.chartMedication?.id,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final m in state.medicationsInUse)
+                DropdownMenuItem(
+                  value: m.id,
+                  child: Text(m.name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (id) =>
+                state.updateSettings((s) => s.chartMedicationId = id),
+          ),
+        ),
+      ],
+    ),
+  );
+
   List<Widget> _dosages(AppState state, WeightUnit unit) {
     final summaries = doseSummaries(state.jabs, state.weights, DateTime.now());
-    final allDoses = state.jabs.map((j) => j.doseMg);
     final fmt = DateFormat('d MMM');
     return [
       const SectionHeader('Dosages'),
@@ -183,7 +222,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
               ListTile(
                 leading: DoseChip(
                   d.doseMg,
-                  color: doseColor(d.doseMg, allDoses),
+                  color: doseColor(
+                    d.doseMg,
+                    state.jabsFor(d.medicationId).map((j) => j.doseMg),
+                  ),
                 ),
                 title: Text(
                   '${state.medication(d.medicationId)?.name ?? '?'} · '

@@ -91,50 +91,54 @@ class DoseSummary {
       startKg == null || endKg == null ? null : endKg! - startKg!;
 }
 
-/// Groups consecutive jabs at the same medication and dose. A dose's weight
-/// window runs from its first jab to the next dose's first jab (or today).
+/// Groups consecutive jabs of each medication at the same dose. A dose's
+/// weight window runs from its first jab to that medication's next dose (or
+/// today). Jabs of other medications in between don't split a group, so
+/// concurrent medications are summarised independently. Sorted by start.
 List<DoseSummary> doseSummaries(
   List<Jab> jabs,
   List<WeightEntry> weights,
   DateTime now,
 ) {
-  final groups = <List<Jab>>[];
+  final byMed = <int, List<List<Jab>>>{};
   for (final j in jabs) {
-    if (groups.isNotEmpty &&
-        groups.last.last.doseMg == j.doseMg &&
-        groups.last.last.medicationId == j.medicationId) {
+    final groups = byMed.putIfAbsent(j.medicationId, () => []);
+    if (groups.isNotEmpty && groups.last.last.doseMg == j.doseMg) {
       groups.last.add(j);
     } else {
       groups.add([j]);
     }
   }
   final out = <DoseSummary>[];
-  for (var i = 0; i < groups.length; i++) {
-    final g = groups[i];
-    final from = dateOnly(g.first.takenAt);
-    final to = i + 1 < groups.length
-        ? dateOnly(groups[i + 1].first.takenAt)
-        : dateOnly(now);
-    final window = weights.where(
-      (w) => !w.date.isBefore(from) && !w.date.isAfter(to),
-    );
-    // Use the last weight before the dose started as its baseline if there is
-    // one, so back-to-back doses chain together.
-    final before = weights.where((w) => w.date.isBefore(from));
-    final startKg = before.isNotEmpty
-        ? before.last.kg
-        : (window.isNotEmpty ? window.first.kg : null);
-    out.add(
-      DoseSummary(
-        medicationId: g.first.medicationId,
-        doseMg: g.first.doseMg,
-        jabCount: g.length,
-        first: g.first.takenAt,
-        last: g.last.takenAt,
-        startKg: startKg,
-        endKg: window.isNotEmpty ? window.last.kg : null,
-      ),
-    );
+  for (final groups in byMed.values) {
+    for (var i = 0; i < groups.length; i++) {
+      final g = groups[i];
+      final from = dateOnly(g.first.takenAt);
+      final to = i + 1 < groups.length
+          ? dateOnly(groups[i + 1].first.takenAt)
+          : dateOnly(now);
+      final window = weights.where(
+        (w) => !w.date.isBefore(from) && !w.date.isAfter(to),
+      );
+      // Use the last weight before the dose started as its baseline if there
+      // is one, so back-to-back doses chain together.
+      final before = weights.where((w) => w.date.isBefore(from));
+      final startKg = before.isNotEmpty
+          ? before.last.kg
+          : (window.isNotEmpty ? window.first.kg : null);
+      out.add(
+        DoseSummary(
+          medicationId: g.first.medicationId,
+          doseMg: g.first.doseMg,
+          jabCount: g.length,
+          first: g.first.takenAt,
+          last: g.last.takenAt,
+          startKg: startKg,
+          endKg: window.isNotEmpty ? window.last.kg : null,
+        ),
+      );
+    }
   }
+  out.sort((a, b) => a.first.compareTo(b.first));
   return out;
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../data/app_state.dart';
 import '../logic/dates.dart';
 import '../logic/units.dart';
+import '../models/medication.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/day_editors.dart';
@@ -118,6 +119,11 @@ class _MonthGrid extends StatelessWidget {
     final jabDays = state.jabs.map((j) => dayKey(j.takenAt)).toSet();
     final weightDays = state.weights.map((w) => dayKey(w.date)).toSet();
     final logDays = state.dayLogs.keys.toSet();
+    final now = DateTime.now();
+    final dueDays = {
+      for (final m in state.scheduledMedications)
+        if (state.nextJab(m, now).due case final due?) dayKey(due),
+    };
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -164,6 +170,7 @@ class _MonthGrid extends StatelessWidget {
                         hasJab: jabDays.contains(k),
                         hasWeight: weightDays.contains(k),
                         hasLog: logDays.contains(k),
+                        isDue: dueDays.contains(k),
                         onTap: () => onSelect(day),
                       );
                     }(),
@@ -178,7 +185,7 @@ class _MonthGrid extends StatelessWidget {
 
 class _DayCell extends StatelessWidget {
   final DateTime day;
-  final bool isToday, isSelected, hasJab, hasWeight, hasLog;
+  final bool isToday, isSelected, hasJab, hasWeight, hasLog, isDue;
   final VoidCallback onTap;
 
   const _DayCell({
@@ -188,6 +195,7 @@ class _DayCell extends StatelessWidget {
     required this.hasJab,
     required this.hasWeight,
     required this.hasLog,
+    required this.isDue,
     required this.onTap,
   });
 
@@ -231,6 +239,7 @@ class _DayCell extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (isDue && !hasJab) _dot(AppColors.accent),
                 if (hasWeight) _dot(AppColors.warning),
                 if (hasLog) _dot(AppColors.level),
               ],
@@ -264,12 +273,13 @@ class _DayPanel extends StatelessWidget {
     final w = state.weightOn(day);
     final log = state.dayLog(day);
     final unit = state.settings.weightUnit;
-    final med = state.primaryMedication;
     // Level at the end of the day for past days, or now for today.
     final at = day == today
         ? DateTime.now()
         : DateTime(day.year, day.month, day.day, 23, 59);
-    final level = med == null ? null : state.levels.levelAt(med.id!, at);
+    final levels = [
+      for (final m in state.medicationsInUse) (m, state.levelOf(m, at)),
+    ].where((e) => e.$2 >= 0.005).toList();
 
     return Container(
       color: AppColors.surface,
@@ -282,26 +292,22 @@ class _DayPanel extends StatelessWidget {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(flex: 2, child: _jabCard(context, jabs)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: StatCard(
-                    icon: Icons.ssid_chart,
-                    iconColor: AppColors.level,
-                    label: 'Est. level',
-                    value: level == null || level == 0
-                        ? '—'
-                        : level.toStringAsFixed(2),
-                    unit: level == null || level == 0 ? null : 'mg',
-                  ),
-                ),
-              ],
+          // Several medications' levels need the full width to stay legible.
+          if (levels.length > 1) ...[
+            _jabCard(context, jabs),
+            const SizedBox(height: 10),
+            _levelCard(levels),
+          ] else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(flex: 2, child: _jabCard(context, jabs)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _levelCard(levels)),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 10),
           StatGrid(
             children: [
@@ -442,6 +448,63 @@ class _DayPanel extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _levelCard(List<(Medication, double)> levels) {
+    if (levels.length <= 1) {
+      final v = levels.firstOrNull?.$2;
+      return StatCard(
+        icon: Icons.ssid_chart,
+        iconColor: AppColors.level,
+        label: 'Est. level',
+        value: v == null ? '—' : v.toStringAsFixed(2),
+        unit: v == null ? null : 'mg',
+      );
+    }
+    return Card(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.ssid_chart, size: 16, color: AppColors.level),
+                SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Est. level',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.fade,
+                    style: TextStyle(color: AppColors.muted, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            for (final (m, v) in levels)
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${v.toStringAsFixed(2)} mg ',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    TextSpan(
+                      text: m.name,
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
+      ),
     );
   }
 

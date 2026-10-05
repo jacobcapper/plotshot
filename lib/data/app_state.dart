@@ -4,6 +4,7 @@ import '../logic/dates.dart';
 import '../logic/pk.dart';
 import '../logic/schedule.dart';
 import '../logic/sites.dart';
+import '../logic/units.dart';
 import '../models/day_log.dart';
 import '../models/jab.dart';
 import '../models/medication.dart';
@@ -41,14 +42,36 @@ class AppState extends ChangeNotifier {
     jabs = await _db.jabs();
     weights = await _db.weights();
     dayLogs = {for (final l in await _db.dayLogs()) dayKey(l.date): l};
+    await _migrateLegacySchedule();
     _changed(reschedule: true);
+  }
+
+  /// Copies the pre-v2 global interval, site rotation and planned dose onto
+  /// each medication, once.
+  Future<void> _migrateLegacySchedule() async {
+    final legacy = settings.legacy;
+    if (legacy == null) return;
+    for (final m in [...medications]) {
+      final updated = m.copyWith(
+        daysBetweenJabs: legacy.daysBetweenJabs?.toDouble(),
+        active: medicationInUse(m),
+        sites: legacy.rotation,
+        nextDoseMg: legacy.nextMedicationId == m.id
+            ? legacy.nextDoseMg
+            : m.nextDoseMg,
+      );
+      await _db.saveMedication(updated);
+    }
+    medications = await _db.medications();
+    settings.legacy = null;
+    await settings.save();
   }
 
   void _changed({bool reschedule = false}) {
     _levels = null;
     notifyListeners();
     if (reschedule) {
-      rescheduleReminder();
+      rescheduleReminders();
     }
   }
 
@@ -66,6 +89,24 @@ class AppState extends ChangeNotifier {
 
   Jab? get lastJab => jabs.isEmpty ? null : jabs.last;
 
+  List<Jab> jabsFor(int medicationId) =>
+      jabs.where((j) => j.medicationId == medicationId).toList();
+
+  Jab? lastJabFor(int medicationId) {
+    for (var i = jabs.length - 1; i >= 0; i--) {
+      if (jabs[i].medicationId == medicationId) return jabs[i];
+    }
+    return null;
+  }
+
+  /// 1-based position of [jab] among jabs of the same medication.
+  int jabNumber(Jab jab) =>
+      jabs
+          .where((j) => j.medicationId == jab.medicationId)
+          .toList()
+          .indexWhere((j) => j.id == jab.id) +
+      1;
+
   WeightEntry? get latestWeight => weights.isEmpty ? null : weights.last;
 
   WeightEntry? weightOn(DateTime day) =>
@@ -76,37 +117,66 @@ class AppState extends ChangeNotifier {
   List<Jab> jabsOn(DateTime day) =>
       jabs.where((j) => sameDay(j.takenAt, day)).toList();
 
-  /// The medication whose level is headlined: the one used most recently.
-  Medication? get primaryMedication => medication(lastJab?.medicationId);
+  /// Medications with at least one jab, most recently used first.
+  List<Medication> get medicationsInUse => levels
+      .medicationsInUse()
+      .map(medication)
+      .whereType<Medication>()
+      .toList();
 
-  double currentLevel([DateTime? at]) {
-    final med = primaryMedication;
-    if (med == null) return 0;
-    return levels.levelAt(med.id!, at ?? DateTime.now());
+  /// Active medications that have a schedule to show, soonest due first.
+  /// Medications with no jabs yet come last.
+  List<Medication> get scheduledMedications {
+    final now = DateTime.now();
+    final meds = medications.where((m) => m.active).toList();
+    meds.sort((a, b) {
+      final da = nextJab(a, now).due, db = nextJab(b, now).due;
+      if (da == null || db == null) {
+        return da == null ? (db == null ? a.id!.compareTo(b.id!) : 1) : -1;
+      }
+      return da.compareTo(db);
+    });
+    return meds;
   }
 
-  NextJabInfo nextJab([DateTime? now]) => NextJabInfo.compute(
-    lastJab,
-    settings.daysBetweenJabs,
+  /// The medication the weight chart is coloured by: the user's choice, or
+  /// the built-in medication with the most jabs, or the most used.
+  Medication? get chartMedication {
+    final chosen = medication(settings.chartMedicationId);
+    if (chosen != null && jabs.any((j) => j.medicationId == chosen.id)) {
+      return chosen;
+    }
+    final inUse = medicationsInUse;
+    if (inUse.isEmpty) return null;
+    int count(Medication m) => jabs.where((j) => j.medicationId == m.id).length;
+    final sorted = [...inUse]
+      ..sort((a, b) {
+        if (a.builtIn != b.builtIn) return a.builtIn ? -1 : 1;
+        return count(b).compareTo(count(a));
+      });
+    return sorted.first;
+  }
+
+  double levelOf(Medication m, [DateTime? at]) =>
+      levels.levelAt(m.id!, at ?? DateTime.now());
+
+  NextJabInfo nextJab(Medication m, [DateTime? now]) => NextJabInfo.compute(
+    lastJabFor(m.id!),
+    m.daysBetweenJabs,
     now ?? DateTime.now(),
   );
 
-  Medication? get nextMedication =>
-      medication(settings.nextMedicationId) ??
+  /// The medication a new jab defaults to: the active one due soonest.
+  Medication? get defaultMedication =>
+      scheduledMedications.firstOrNull ??
       medication(lastJab?.medicationId) ??
       medications.firstOrNull;
 
-  double? get nextDose {
-    final med = nextMedication;
-    if (med == null) return null;
-    if (settings.nextDoseMg != null) return settings.nextDoseMg;
-    if (lastJab != null && lastJab!.medicationId == med.id) {
-      return lastJab!.doseMg;
-    }
-    return med.doses.firstOrNull;
-  }
+  double? nextDose(Medication m) =>
+      m.nextDoseMg ?? lastJabFor(m.id!)?.doseMg ?? m.doses.firstOrNull;
 
-  String? get nextSiteSuggestion => nextSite(settings.rotation, lastJab?.site);
+  String? nextSiteFor(Medication m) =>
+      nextSite(m.sites, lastJabFor(m.id!)?.site);
 
   // ---- Jabs ----
 
@@ -114,11 +184,16 @@ class AppState extends ChangeNotifier {
     final saved = await _db.saveJab(jab);
     jabs = [...jabs.where((j) => j.id != saved.id), saved]
       ..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-    // A newly logged latest jab consumes any planned next-dose change.
-    if (jab.id == null && identical(jabs.last, saved)) {
-      settings.nextDoseMg = null;
-      settings.nextMedicationId = null;
-      await settings.save();
+    // A newly logged latest jab consumes any planned dose change, and puts
+    // the medication on a schedule if it wasn't.
+    final med = medication(saved.medicationId);
+    if (jab.id == null &&
+        med != null &&
+        identical(lastJabFor(med.id!), saved) &&
+        (med.nextDoseMg != null || !med.active)) {
+      final updated = med.copyWith(nextDoseMg: null, active: true);
+      await _db.saveMedication(updated);
+      _replaceMedication(updated);
     }
     _changed(reschedule: true);
   }
@@ -129,12 +204,8 @@ class AppState extends ChangeNotifier {
     _changed(reschedule: true);
   }
 
-  Future<void> setNextDose(int medicationId, double doseMg) async {
-    settings.nextMedicationId = medicationId;
-    settings.nextDoseMg = doseMg;
-    await settings.save();
-    _changed();
-  }
+  Future<void> setNextDose(Medication m, double doseMg) =>
+      saveMedication(m.copyWith(nextDoseMg: doseMg));
 
   // ---- Weights & day logs ----
 
@@ -161,11 +232,16 @@ class AppState extends ChangeNotifier {
 
   // ---- Medications ----
 
-  Future<void> saveMedication(Medication m) async {
-    final saved = await _db.saveMedication(m);
-    medications = [...medications.where((e) => e.id != saved.id), saved]
+  void _replaceMedication(Medication m) {
+    medications = [...medications.where((e) => e.id != m.id), m]
       ..sort((a, b) => a.id!.compareTo(b.id!));
-    _changed();
+  }
+
+  Future<Medication> saveMedication(Medication m) async {
+    final saved = await _db.saveMedication(m);
+    _replaceMedication(saved);
+    _changed(reschedule: true);
+    return saved;
   }
 
   bool medicationInUse(Medication m) => jabs.any((j) => j.medicationId == m.id);
@@ -176,12 +252,7 @@ class AppState extends ChangeNotifier {
     }
     await _db.deleteMedication(m.id!);
     medications = medications.where((e) => e.id != m.id).toList();
-    if (settings.nextMedicationId == m.id) {
-      settings.nextMedicationId = null;
-      settings.nextDoseMg = null;
-      await settings.save();
-    }
-    _changed();
+    _changed(reschedule: true);
   }
 
   // ---- Settings ----
@@ -195,18 +266,32 @@ class AppState extends ChangeNotifier {
   /// How many daily follow-ups to send if a jab day is missed.
   static const missedJabFollowUps = 3;
 
-  Future<void> rescheduleReminder() async {
+  /// One set of reminders per active medication that has been started.
+  Future<void> rescheduleReminders() async {
     try {
-      final next = nextJab();
-      if (!settings.remindersEnabled || next.due == null) {
-        await notifications.cancelReminders();
-        return;
+      final now = DateTime.now();
+      final reminders = <Reminder>[];
+      if (settings.remindersEnabled) {
+        for (final m in medications.where((m) => m.active)) {
+          final due = nextJab(m, now).due;
+          if (due == null) continue;
+          final dose = nextDose(m);
+          final times = reminderTimes(due, now);
+          for (var i = 0; i < times.length; i++) {
+            reminders.add(
+              Reminder(
+                id: m.id! * 10 + i,
+                at: times[i],
+                title: '${m.name} jab day',
+                body:
+                    'Time for your ${m.name}'
+                    '${dose == null ? '' : ' ${formatDose(dose)} mg'} jab.',
+              ),
+            );
+          }
+        }
       }
-      await notifications.scheduleReminders(
-        reminderTimes(next.due!, DateTime.now()),
-        title: 'Jab day',
-        body: _reminderBody(),
-      );
+      await notifications.scheduleReminders(reminders);
     } catch (e) {
       debugPrint('Reminder scheduling failed: $e');
     }
@@ -220,16 +305,6 @@ class AppState extends ChangeNotifier {
         DateTime(due.year, due.month, due.day + i, t.hour, t.minute),
     ].where((d) => d.isAfter(now)).toList();
   }
-
-  String _reminderBody() {
-    final med = nextMedication;
-    final dose = nextDose;
-    if (med == null) return 'Time for your next jab.';
-    return 'Time for your ${med.name}${dose == null ? '' : ' ${_fmt(dose)} mg'} jab.';
-  }
-
-  static String _fmt(double d) =>
-      d == d.roundToDouble() ? d.toStringAsFixed(0) : d.toString();
 
   // ---- Health Connect ----
 
@@ -291,8 +366,10 @@ class AppState extends ChangeNotifier {
       dayLogs: b.dayLogs,
     );
     settings.applyJson(b.settings);
-    settings.nextDoseMg = null;
-    settings.nextMedicationId = null;
+    // A v1 backup carries the old shared schedule.
+    settings.legacy = b.version < 2
+        ? LegacySchedule.fromJson(b.settings)
+        : null;
     await settings.save();
     await load();
   }

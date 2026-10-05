@@ -5,6 +5,7 @@ import '../models/weight_entry.dart';
 import 'settings.dart';
 
 class BackupContents {
+  final int version;
   final Map<String, Object?> settings;
   final List<Medication> medications;
   final List<Jab> jabs;
@@ -12,6 +13,7 @@ class BackupContents {
   final List<DayLog> dayLogs;
 
   BackupContents(
+    this.version,
     this.settings,
     this.medications,
     this.jabs,
@@ -23,7 +25,7 @@ class BackupContents {
 /// JSON backup format. Rows use the same shape as the database tables.
 class Backup {
   static const format = 'plotshot-backup';
-  static const version = 1;
+  static const version = 2;
 
   static Map<String, Object?> encode({
     required Settings settings,
@@ -62,6 +64,7 @@ class Backup {
       throw const FormatException('Backup has jabs for an unknown medication');
     }
     return BackupContents(
+      (json['version'] as num? ?? 1).toInt(),
       Map<String, Object?>.from(json['settings'] as Map? ?? const {}),
       meds,
       jabs,

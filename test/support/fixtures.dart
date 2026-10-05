@@ -2,6 +2,7 @@ import 'package:plotshot/data/app_state.dart';
 import 'package:plotshot/data/database.dart';
 import 'package:plotshot/data/settings.dart';
 import 'package:plotshot/models/jab.dart';
+import 'package:plotshot/models/medication.dart';
 import 'package:plotshot/models/weight_entry.dart';
 import 'package:plotshot/services/health_service.dart';
 import 'package:plotshot/services/notification_service.dart';
@@ -22,18 +23,11 @@ class FakeHealth implements HealthService {
 }
 
 class RecordingNotifications extends NoopNotificationService {
-  List<DateTime> scheduled = [];
+  List<Reminder> scheduled = [];
   @override
-  Future<void> scheduleReminders(
-    List<DateTime> times, {
-    required String title,
-    required String body,
-  }) async {
-    scheduled = times;
+  Future<void> scheduleReminders(List<Reminder> reminders) async {
+    scheduled = reminders;
   }
-
-  @override
-  Future<void> cancelReminders() async => scheduled = [];
 }
 
 Future<AppState> makeState({bool seed = false}) async {
@@ -105,4 +99,30 @@ Future<void> seedSample(AppState state) async {
     s.heightCm = 190.5;
     s.goalKg = 120;
   });
+}
+
+/// Adds a twice-weekly custom medication alongside the sample Retatrutide.
+Future<Medication> seedSecondMedication(AppState state) async {
+  final med = await state.saveMedication(
+    const Medication(
+      name: 'Testosterone Enanthate',
+      halfLifeDays: 4.5,
+      timeToPeakDays: 1.5,
+      doses: [50, 62.5, 75, 100],
+      daysBetweenJabs: 3.5,
+      sites: ['Glute - Left', 'Glute - Right', 'Thigh - Left', 'Thigh - Right'],
+    ),
+  );
+  final now = DateTime.now();
+  for (var i = 6; i >= 0; i--) {
+    await state.saveJab(
+      Jab(
+        medicationId: med.id!,
+        doseMg: 75,
+        takenAt: now.subtract(Duration(hours: (i * 3.5 * 24 + 30).round())),
+        site: med.sites[i % med.sites.length],
+      ),
+    );
+  }
+  return state.medication(med.id)!;
 }

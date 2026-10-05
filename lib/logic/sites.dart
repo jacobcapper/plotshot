@@ -9,8 +9,10 @@ const allInjectionSites = [
   'Thigh - Right',
   'Arm - Left',
   'Arm - Right',
-  'Buttock - Left',
-  'Buttock - Right',
+  'Glute - Left',
+  'Glute - Right',
+  'Delt - Left',
+  'Delt - Right',
 ];
 
 const defaultRotation = [

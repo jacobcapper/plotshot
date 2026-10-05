@@ -10,17 +10,24 @@ Everything is stored on the phone. There are no accounts and no servers.
   absorption and elimination, and the curves are added together. Shown on
   Summary (chart with a "now" marker, a dashed projection and
   drag-to-inspect), as the "Est. level" stat, and per day in the Calendar.
-- **Jabs.** A Next Jab card shows when you're due, the planned dose (tap ✎ to
-  step up) and the next site in your rotation. History is grouped by month.
-- **Results.** A weight chart coloured by dose, with 1/3/6 month and all-time
-  ranges. Stats for total change, BMI, current weight, percent change, weekly
+- **Several medications at once.** Each medication has its own schedule
+  (days between jabs, decimals such as 3.5 allowed), its own injection-site
+  rotation, its own planned next dose and its own level estimate, so you can
+  run something like Retatrutide weekly alongside a twice-weekly custom
+  medication.
+- **Jabs.** A Next Jab card for each active medication, soonest due first.
+  Each card shows when you're due, the planned dose (tap ✎ to step up) and the
+  next site in that medication's rotation. History is grouped by month, jabs
+  are numbered per medication, and you can filter by medication.
+- **Results.** A weight chart coloured by one medication's doses (you choose
+  which, if you're on several), with 1/3/6 month and all-time ranges. Stats for total change, BMI, current weight, percent change, weekly
   average and distance to goal. A per-dose table and the weight log.
 - **Calendar.** A month view. Each day records the jab, est. level, weight,
   calories, protein, side effects and notes.
 - **Summary.** Sections you can reorder and hide: Jab History, Levels,
   Next Jab, Today, Results, Journey.
-- **Reminders.** A notification on jab day, plus up to 3 daily follow-ups if
-  you miss it.
+- **Reminders.** A notification on each medication's jab day, plus up to 3
+  daily follow-ups if you miss it.
 - **Health Connect.** Reads weight, calories and protein. Values you type in
   are never overwritten.
 - **Backup.** JSON export through the share sheet, and import.
@@ -33,7 +40,8 @@ Amount in body after a dose *D* given *t* days ago:
     A(t) = D · ka / (ka − ke) · (e^(−ke·t) − e^(−ka·t))
 
 `ke = ln 2 / half-life`. `ka` is solved so the curve peaks at the medication's
-*time to peak*. Built-in defaults (all editable in Settings → Medications):
+*time to peak*. Built-in defaults (all editable in Settings → Medications,
+where you can also add your own):
 
 | Medication  | Half-life | Time to peak |
 |-------------|-----------|--------------|

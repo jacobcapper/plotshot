@@ -20,16 +20,9 @@ class NextJabInfo {
     DueState.upcoming => days == 1 ? 'Due tomorrow' : 'Due in $days days',
   };
 
-  static NextJabInfo compute(Jab? last, int daysBetweenJabs, DateTime now) {
+  static NextJabInfo compute(Jab? last, double daysBetweenJabs, DateTime now) {
     if (last == null) return const NextJabInfo(null, DueState.notStarted, 0);
-    final t = last.takenAt;
-    final due = DateTime(
-      t.year,
-      t.month,
-      t.day + daysBetweenJabs,
-      t.hour,
-      t.minute,
-    );
+    final due = addDays(last.takenAt, daysBetweenJabs);
     final days = calendarDaysBetween(now, due);
     final state = days > 0
         ? DueState.upcoming
@@ -39,3 +32,24 @@ class NextJabInfo {
     return NextJabInfo(due, state, days);
   }
 }
+
+/// Adds [days] to [t], keeping the time of day across DST changes for whole
+/// days. Fractional days (e.g. 3.5) add the remainder as hours.
+DateTime addDays(DateTime t, double days) {
+  final whole = days.floor();
+  final extraMinutes = ((days - whole) * Duration.minutesPerDay).round();
+  return DateTime(
+    t.year,
+    t.month,
+    t.day + whole,
+    t.hour,
+    t.minute,
+    t.second,
+    t.millisecond,
+    t.microsecond,
+  ).add(Duration(minutes: extraMinutes));
+}
+
+/// "7", "3.5": for showing an interval.
+String formatDays(double d) =>
+    d == d.roundToDouble() ? d.toStringAsFixed(0) : d.toString();

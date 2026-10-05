@@ -3,12 +3,15 @@ import 'package:provider/provider.dart';
 
 import '../../data/app_state.dart';
 import '../../logic/pk.dart';
+import '../../logic/schedule.dart';
+import '../../logic/sites.dart';
 import '../../logic/units.dart';
 import '../../models/medication.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/inputs.dart';
 import '../../widgets/level_chart.dart';
+import 'sites_screen.dart';
 
 class MedicationsScreen extends StatelessWidget {
   const MedicationsScreen({super.key});
@@ -34,9 +37,10 @@ class MedicationsScreen extends StatelessWidget {
               child: ListTile(
                 title: Text(m.name),
                 subtitle: Text(
+                  '${m.active ? 'Every ${formatDays(m.daysBetweenJabs)} days' : 'Not on a schedule'}'
+                  ' · ${m.sites.length} sites\n'
                   'Half-life ${formatDose(m.halfLifeDays)} d · peak at '
-                  '${formatDose(m.timeToPeakDays)} d\n'
-                  'Doses: ${m.doses.map(formatDose).join(', ')} mg',
+                  '${formatDose(m.timeToPeakDays)} d',
                 ),
                 isThreeLine: true,
                 trailing: const Icon(Icons.chevron_right),
@@ -62,7 +66,9 @@ class MedicationEditorScreen extends StatefulWidget {
 }
 
 class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
-  late final TextEditingController _name, _halfLife, _tmax, _doses;
+  late final TextEditingController _name, _halfLife, _tmax, _doses, _days;
+  late bool _active;
+  late List<String> _sites;
   String? _error;
 
   @override
@@ -79,6 +85,9 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
     _doses = TextEditingController(
       text: m?.doses.map(formatDose).join(', ') ?? '',
     );
+    _days = TextEditingController(text: formatDays(m?.daysBetweenJabs ?? 7));
+    _active = m?.active ?? true;
+    _sites = [...(m?.sites ?? defaultRotation)];
     for (final c in [_halfLife, _tmax]) {
       c.addListener(() => setState(() {}));
     }
@@ -86,7 +95,7 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _halfLife, _tmax, _doses]) {
+    for (final c in [_name, _halfLife, _tmax, _doses, _days]) {
       c.dispose();
     }
     super.dispose();
@@ -97,9 +106,12 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
     final hl = parseNum(_halfLife.text);
     final tmax = parseNum(_tmax.text);
     final doses = Medication.parseDoses(_doses.text.replaceAll(' ', ''));
+    final days = parseNum(_days.text);
     String? err;
     if (name.isEmpty) {
       err = 'Enter a name';
+    } else if (days == null || days < 0.5 || days > 90) {
+      err = 'Days between jabs must be between 0.5 and 90';
     } else if (hl == null || hl <= 0 || hl > 60) {
       err = 'Half-life must be between 0 and 60 days';
     } else if (tmax == null || tmax < 0 || tmax > 14) {
@@ -124,6 +136,9 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
               halfLifeDays: hl,
               timeToPeakDays: tmax,
               doses: doses,
+              daysBetweenJabs: days,
+              active: _active,
+              sites: _sites,
             );
     await context.read<AppState>().saveMedication(m);
     if (mounted) Navigator.pop(context);
@@ -210,7 +225,62 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Name'),
           ),
-          const SizedBox(height: 12),
+          const _Heading('SCHEDULE'),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('On a schedule'),
+                  subtitle: const Text(
+                    'Shows a Next Jab card and sends reminders. Turn off '
+                    'when you stop this medication.',
+                  ),
+                  value: _active,
+                  onChanged: (v) => setState(() => _active = v),
+                ),
+                const Divider(indent: 16, endIndent: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: TextField(
+                    controller: _days,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Days between jabs',
+                      helperText: 'e.g. 7 for weekly, 3.5 for twice a week',
+                      suffixText: 'days',
+                    ),
+                  ),
+                ),
+                const Divider(indent: 16, endIndent: 16),
+                ListTile(
+                  title: const Text('Injection sites'),
+                  subtitle: Text(
+                    _sites.isEmpty
+                        ? 'No rotation'
+                        : '${_sites.length} in rotation · starts at ${_sites.first}',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () async {
+                    final r = await Navigator.of(context).push<List<String>>(
+                      MaterialPageRoute(
+                        builder: (_) => SitesScreen(
+                          medicationName: _name.text.trim().isEmpty
+                              ? 'Medication'
+                              : _name.text.trim(),
+                          initial: _sites,
+                        ),
+                      ),
+                    );
+                    if (r != null) setState(() => _sites = r);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const _Heading('MODEL & DOSES'),
           Row(
             children: [
               Expanded(
@@ -288,4 +358,23 @@ class _MedicationEditorScreenState extends State<MedicationEditorScreen> {
       ),
     );
   }
+}
+
+class _Heading extends StatelessWidget {
+  final String text;
+  const _Heading(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 24, 0, 10),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AppColors.muted,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
 }

@@ -6,6 +6,7 @@ import '../data/app_state.dart';
 import '../logic/sites.dart';
 import '../logic/units.dart';
 import '../models/jab.dart';
+import '../models/medication.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/inputs.dart';
@@ -15,16 +16,29 @@ import '../widgets/inputs.dart';
 class JabEditorScreen extends StatefulWidget {
   final Jab? jab;
   final DateTime? initialDate;
-  const JabEditorScreen({super.key, this.jab, this.initialDate});
+
+  /// Medication to pre-select for a new jab; defaults to the one due soonest.
+  final Medication? medication;
+  const JabEditorScreen({
+    super.key,
+    this.jab,
+    this.initialDate,
+    this.medication,
+  });
 
   static Future<void> open(
     BuildContext context, {
     Jab? jab,
     DateTime? initialDate,
+    Medication? medication,
   }) => Navigator.of(context).push(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => JabEditorScreen(jab: jab, initialDate: initialDate),
+      builder: (_) => JabEditorScreen(
+        jab: jab,
+        initialDate: initialDate,
+        medication: medication,
+      ),
     ),
   );
 
@@ -56,11 +70,20 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
       final d = widget.initialDate;
       _date = d ?? now;
       _time = TimeOfDay.fromDateTime(now);
-      _medId = state.nextMedication?.id;
-      _dose = state.nextDose;
-      _site = state.nextSiteSuggestion;
+      _applyMedicationDefaults(
+        state,
+        widget.medication ?? state.defaultMedication,
+      );
     }
     _notes = TextEditingController(text: j?.notes ?? '');
+  }
+
+  /// For a new jab, the dose and site follow the chosen medication's
+  /// schedule.
+  void _applyMedicationDefaults(AppState state, Medication? m) {
+    _medId = m?.id;
+    _dose = m == null ? null : state.nextDose(m);
+    _site = m == null ? null : state.nextSiteFor(m);
   }
 
   @override
@@ -122,7 +145,7 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
       suffix: 'mg',
       initial: _dose,
       min: 0.01,
-      max: 100,
+      max: 10000,
     );
     if (v != null && !v.isNaN) setState(() => _dose = v);
   }
@@ -132,11 +155,18 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
     final state = context.watch<AppState>();
     final med = state.medication(_medId);
     final doses = {...?med?.doses, ?_dose}.toList()..sort();
-    final rotation = state.settings.rotation;
+    final rotation = med?.sites ?? const <String>[];
+    final suggestion = med == null || widget.jab != null
+        ? null
+        : state.nextSiteFor(med);
     final others = allInjectionSites
         .where((s) => !rotation.contains(s))
         .toList();
-    if (_site != null && !allInjectionSites.contains(_site)) others.add(_site!);
+    if (_site != null &&
+        !rotation.contains(_site) &&
+        !allInjectionSites.contains(_site)) {
+      others.add(_site!);
+    }
     final future = _takenAt.isAfter(
       DateTime.now().add(const Duration(minutes: 5)),
     );
@@ -198,16 +228,24 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
           const _Label('DETAILS'),
           DropdownButtonFormField<int>(
             initialValue: _medId,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Medication'),
             items: [
               for (final m in state.medications)
-                DropdownMenuItem(value: m.id, child: Text(m.name)),
+                DropdownMenuItem(
+                  value: m.id,
+                  child: Text(m.name, overflow: TextOverflow.ellipsis),
+                ),
             ],
             onChanged: (id) => setState(() {
-              _medId = id;
               final m = state.medication(id);
-              if (m != null && _dose != null && !m.doses.contains(_dose)) {
-                _dose = m.doses.firstOrNull;
+              if (widget.jab == null) {
+                _applyMedicationDefaults(state, m);
+              } else {
+                _medId = id;
+                if (m != null && _dose != null && !m.doses.contains(_dose)) {
+                  _dose = m.doses.firstOrNull;
+                }
               }
             }),
           ),
@@ -239,6 +277,7 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String?>(
+            key: ValueKey('site-$_medId-$_site'),
             initialValue: _site,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Injection site'),
@@ -280,11 +319,11 @@ class _JabEditorScreenState extends State<JabEditorScreen> {
             ],
             onChanged: (s) => setState(() => _site = s),
           ),
-          if (widget.jab == null && state.nextSiteSuggestion != null)
+          if (suggestion != null)
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 4),
               child: Text(
-                'Suggested from your rotation: ${state.nextSiteSuggestion}',
+                'Suggested from your ${med!.name} rotation: $suggestion',
                 style: const TextStyle(color: AppColors.muted, fontSize: 12),
               ),
             ),

@@ -9,7 +9,6 @@ import 'data_screen.dart';
 import 'health_screen.dart';
 import 'medications_screen.dart';
 import 'notifications_screen.dart';
-import 'sites_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -81,38 +80,9 @@ class SettingsScreen extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.date_range),
-                title: const Text('Days Between Jabs'),
-                subtitle: Text('Every ${s.daysBetweenJabs} days'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  final v = await showNumberDialog(
-                    context,
-                    title: 'Days between jabs',
-                    suffix: 'days',
-                    initial: s.daysBetweenJabs.toDouble(),
-                    integer: true,
-                    min: 1,
-                    max: 60,
-                  );
-                  if (v != null && !v.isNaN) {
-                    await state.updateSettings(
-                      (x) => x.daysBetweenJabs = v.round(),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.vaccines_outlined),
-                title: const Text('Injection Sites'),
-                subtitle: Text('${s.rotation.length} in rotation'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _push(context, const SitesScreen()),
-              ),
-              ListTile(
                 leading: const Icon(Icons.medication_outlined),
                 title: const Text('Medications'),
-                subtitle: const Text('Doses, half-life and time to peak'),
+                subtitle: const Text('Schedules, doses, sites and half-life'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _push(context, const MedicationsScreen()),
               ),
