@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home screen widgets. Matches AppColors in lib/theme.dart. -->
+<resources>
+    <color name="widget_background">#FF1C202B</color>
+    <color name="widget_track">#FF2E3443</color>
+    <color name="widget_accent">#FFA594FF</color>
+    <color name="widget_on_accent">#FF1B1238</color>
+    <color name="widget_text">#FFEDEFF5</color>
+    <color name="widget_muted">#FF8D93A5</color>
+    <color name="widget_danger">#FFFF7A85</color>
+    <color name="widget_warning">#FFFFC36B</color>
+    <color name="widget_success">#FF6FE0A0</color>
+
+    <string name="widget_schedule_name">Next jabs</string>
+    <string name="widget_schedule_description">When each medication is next due, with a button to add a jab</string>
+    <string name="widget_goal_name">Goal progress</string>
+    <string name="widget_goal_description">How far you are from your first weigh-in to your goal weight</string>
+</resources>

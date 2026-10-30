@@ -11,9 +11,11 @@ import '../models/medication.dart';
 import '../models/weight_entry.dart';
 import '../services/health_service.dart';
 import '../services/notification_service.dart';
+import '../services/widget_service.dart';
 import 'backup.dart';
 import 'database.dart';
 import 'settings.dart';
+import 'widget_data.dart';
 
 /// The app's in-memory model. Data sets are small (a jab a week, a weight a
 /// day), so everything is loaded up front and kept in sorted lists.
@@ -22,6 +24,7 @@ class AppState extends ChangeNotifier {
   final Settings settings;
   final NotificationService notifications;
   final HealthService health;
+  final WidgetService widgets;
 
   List<Medication> medications = [];
   List<Jab> jabs = []; // oldest first
@@ -35,6 +38,7 @@ class AppState extends ChangeNotifier {
     this.settings, {
     required this.notifications,
     required this.health,
+    this.widgets = const NoopWidgetService(),
   });
 
   Future<void> load() async {
@@ -70,8 +74,18 @@ class AppState extends ChangeNotifier {
   void _changed({bool reschedule = false}) {
     _levels = null;
     notifyListeners();
+    refreshWidgets();
     if (reschedule) {
       rescheduleReminders();
+    }
+  }
+
+  /// Sends the latest schedule and goal progress to the home screen widgets.
+  Future<void> refreshWidgets() async {
+    try {
+      await widgets.update(widgetData(this));
+    } catch (e) {
+      debugPrint('Widget update failed: $e');
     }
   }
 

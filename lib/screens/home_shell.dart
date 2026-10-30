@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
 import 'calendar_screen.dart';
+import 'jab_editor_screen.dart';
 import 'jabs_screen.dart';
 import 'results_screen.dart';
 import 'settings/settings_screen.dart';
@@ -28,7 +29,36 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _autoSync());
+    final widgets = context.read<AppState>().widgets;
+    widgets.listen(_openFromWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _autoSync();
+      final launch = await widgets.takeLaunch();
+      if (launch != null) _openFromWidget(launch);
+    });
+  }
+
+  /// Handles a tap on a home screen widget: `plotshot://add-jab?med=<id>`
+  /// opens the jab editor, `plotshot://jabs` and `plotshot://results` their
+  /// tabs.
+  void _openFromWidget(Uri uri) {
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    switch (uri.host) {
+      case 'add-jab':
+        final state = context.read<AppState>();
+        select(1);
+        JabEditorScreen.open(
+          context,
+          medication: state.medication(
+            int.tryParse(uri.queryParameters['med'] ?? ''),
+          ),
+        );
+      case 'jabs':
+        select(1);
+      case 'results':
+        select(2);
+    }
   }
 
   @override

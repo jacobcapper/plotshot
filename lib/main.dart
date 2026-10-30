@@ -8,6 +8,7 @@ import 'data/settings.dart';
 import 'screens/home_shell.dart';
 import 'services/health_service.dart';
 import 'services/notification_service.dart';
+import 'services/widget_service.dart';
 import 'theme.dart';
 
 Future<void> main() async {
@@ -24,6 +25,7 @@ Future<void> main() async {
     await Settings.load(),
     notifications: notifications,
     health: HealthConnectService(),
+    widgets: PlatformWidgetService(),
   );
   await state.load();
   runApp(PlotShotApp(state: state));

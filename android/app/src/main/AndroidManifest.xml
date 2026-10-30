@@ -62,6 +62,30 @@
             </intent-filter>
         </receiver>
 
+        <!-- Home screen widgets -->
+        <receiver
+            android:name=".widgets.ScheduleWidget"
+            android:exported="false"
+            android:label="@string/widget_schedule_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_schedule_info"/>
+        </receiver>
+        <receiver
+            android:name=".widgets.GoalWidget"
+            android:exported="false"
+            android:label="@string/widget_goal_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_goal_info"/>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

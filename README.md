@@ -28,6 +28,9 @@ Everything is stored on the phone. There are no accounts and no servers.
   Next Jab, Today, Results, Journey.
 - **Reminders.** A notification on each medication's jab day, plus up to 3
   daily follow-ups if you miss it.
+- **Home screen widgets.** *Next jabs* lists each scheduled medication with
+  its due day, dose and site; tap a row or **+ Add Jab** to log one. *Goal
+  progress* shows a bar from your first weigh-in to your goal weight.
 - **Health Connect.** Reads weight, calories and protein. Values you type in
   are never overwritten.
 - **Backup.** JSON export through the share sheet, and import.

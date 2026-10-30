@@ -6,6 +6,7 @@ import 'package:plotshot/models/medication.dart';
 import 'package:plotshot/models/weight_entry.dart';
 import 'package:plotshot/services/health_service.dart';
 import 'package:plotshot/services/notification_service.dart';
+import 'package:plotshot/services/widget_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -30,7 +31,10 @@ class RecordingNotifications extends NoopNotificationService {
   }
 }
 
-Future<AppState> makeState({bool seed = false}) async {
+Future<AppState> makeState({
+  bool seed = false,
+  WidgetService widgets = const NoopWidgetService(),
+}) async {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfiNoIsolate;
   SharedPreferences.setMockInitialValues({});
@@ -43,6 +47,7 @@ Future<AppState> makeState({bool seed = false}) async {
     await Settings.load(),
     notifications: RecordingNotifications(),
     health: FakeHealth(),
+    widgets: widgets,
   );
   await state.load();
   if (seed) await seedSample(state);
