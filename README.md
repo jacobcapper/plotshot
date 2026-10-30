@@ -57,19 +57,23 @@ These are estimates for interest only, not medical advice.
 
 ## Getting the app
 
-Every push runs **Build APK** in GitHub Actions. Open the run, download the
-`plotshot-N` artifact, unzip it and install `app-release.apk` on your phone.
-You'll need to allow installs from your browser or file manager.
+Download `app-release.apk` from the latest
+[release](https://github.com/jacobcapper/plotshot/releases/latest) and install
+it on your phone. You'll need to allow installs from your browser or file
+manager. Every push also runs **Build APK** in GitHub Actions, which uploads a
+`plotshot-N` artifact.
 
 ### Signing
 
 Updates only install over an existing copy when they are signed with the same
-key. By default builds use `android/app/plotshot-shared.keystore`, which is
-committed so every CI build is consistent. Anyone with access to this repo
-could sign an APK with that key. To use a private key instead, add the
+key. Official builds are signed with a private key held in the
 `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`
-repository secrets. Switching keys means uninstalling first, so export a
-backup before you do.
+repository secrets, or locally in `android/key.properties` (git-ignored).
+
+Without those, for example in a fork, builds fall back to
+`android/app/plotshot-shared.keystore`. That key is public, so a build signed
+with it is not an official release and won't install over one. Switching
+between keys means uninstalling first, so export a backup before you do.
 
 ## Development
 
@@ -84,3 +88,7 @@ Project layout:
 - `lib/data/`: SQLite storage, settings, backup format, `AppState`
 - `lib/services/`: notifications and Health Connect
 - `lib/screens/`, `lib/widgets/`: UI, including custom-painted charts
+
+## License
+
+MIT. See [LICENSE](LICENSE).
