@@ -67,7 +67,7 @@ void main() {
       'state': 'noWeight',
       'goal': '80.0 kg',
     });
-    // Rounds down until the goal is actually reached.
+    // 99.5% stays below 100 until the goal is actually reached.
     expect(
       goalWidgetData(stats([100, 80.1]), 80, WeightUnit.kg)['percent'],
       99,
@@ -76,6 +76,10 @@ void main() {
     expect(reached['percent'], 100);
     expect(reached['reached'], isTrue);
     // Gaining towards a goal works the same way.
+    expect(
+      goalWidgetData(stats([149, 143.1]), 125, WeightUnit.kg)['percent'],
+      25,
+    );
     final gaining = goalWidgetData(stats([60, 65]), 70, WeightUnit.kg);
     expect(gaining['percent'], 50);
     expect(gaining['toGo'], '5.0 kg');

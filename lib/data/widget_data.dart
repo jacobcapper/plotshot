@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../logic/stats.dart';
 import '../logic/units.dart';
 import 'app_state.dart';
@@ -44,8 +46,10 @@ Map<String, Object?> goalWidgetData(
   final (left, leftUnit) = weightParts((stats.currentKg - goalKg).abs(), unit);
   return {
     'state': 'tracking',
-    // Rounded down so the bar only fills once the goal is actually reached.
-    'percent': reached ? 100 : (stats.goalProgress(goalKg) ?? 0).floor(),
+    // Rounded like the Results screen, but only 100 once actually reached.
+    'percent': reached
+        ? 100
+        : min(99, (stats.goalProgress(goalKg) ?? 0).round()),
     'reached': reached,
     'toGo': '$left $leftUnit',
     'start': formatWeight(stats.journeyStartKg, unit),
